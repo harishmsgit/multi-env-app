@@ -83,10 +83,19 @@ To deploy the microservices on Kubernetes using Minikube, use the separate manif
     ```
 3. Build each service image inside Minikube:
     ```bash
+    eval $(minikube -p minikube docker-env)
     docker build -t user-service:latest ./Microservices/user-service
     docker build -t product-service:latest ./Microservices/product-service
     docker build -t order-service:latest ./Microservices/order-service
     docker build -t gateway-service:latest ./Microservices/gateway-service
+    ```
+
+   If you are building with the host Docker daemon instead of Minikube's daemon, use:
+    ```bash
+    minikube image load user-service:latest
+    minikube image load product-service:latest
+    minikube image load order-service:latest
+    minikube image load gateway-service:latest
     ```
 4. Apply the Kubernetes manifests:
     ```bash
@@ -99,7 +108,11 @@ To deploy the microservices on Kubernetes using Minikube, use the separate manif
     ```bash
     kubectl get pods,svc
     ```
-6. Access the Gateway service locally with port forwarding:
+6. Validate cluster DNS and service discovery with an in-cluster curl pod:
+    ```bash
+    kubectl run curl-test --image=curlimages/curl:8.4.0 --rm -i --restart=Never -- /usr/bin/curl http://user-service:3000/users
+    ```
+7. Access the Gateway service locally with port forwarding:
     ```bash
     kubectl port-forward svc/gateway-service 3003:3003
     ```
@@ -110,3 +123,43 @@ Then use the local endpoint at `http://localhost:3003/api` and the API routes be
 - `GET /api/products`
 - `GET /api/orders`
 - `POST /api/orders`
+
+---
+
+## Optional Ingress Bonus
+
+To enable the Minikube ingress controller:
+
+```bash
+minikube addons enable ingress
+```
+
+Create an ingress resource that routes hosts and paths to each service.
+
+Use `submission/ingress/ingress.yaml` for the routing rules and then apply it:
+
+```bash
+kubectl apply -f submission/ingress/ingress.yaml
+```
+
+Test using the Minikube IP and the host header:
+
+```bash
+curl -H "Host: microservices.local" http://$(minikube ip)/api/users
+curl -H "Host: microservices.local" http://$(minikube ip)/api/products
+curl -H "Host: microservices.local" http://$(minikube ip)/api/orders
+curl -H "Host: microservices.local" http://$(minikube ip)/
+```
+
+Host-based routing uses the request Host header to direct traffic to different ingress rules. It is useful when you want multiple domains or hostnames to share the same ingress controller and route to different services.
+
+Path-based routing uses the request URL path to route traffic. It is useful when a single hostname needs multiple application routes such as `/users`, `/products`, and `/orders`.
+
+If your ingress is configured with path-based routing instead, use direct URL paths:
+
+```bash
+curl http://$(minikube ip)/users
+curl http://$(minikube ip)/products
+curl http://$(minikube ip)/orders
+curl http://$(minikube ip)/
+```

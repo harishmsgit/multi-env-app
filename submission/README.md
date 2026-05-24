@@ -47,6 +47,12 @@ Check pod and service status:
 kubectl get pods,svc
 ```
 
+Validate cluster DNS and service discovery with an in-cluster curl pod:
+
+```bash
+kubectl run curl-test --image=curlimages/curl:8.4.0 --rm -i --restart=Never -- /usr/bin/curl http://user-service:3000/users
+```
+
 Forward the Gateway service locally:
 
 ```bash
@@ -63,14 +69,49 @@ curl http://localhost:3003/api/orders
 
 ## Validate inter-service communication
 
-From the Gateway pod, confirm it can reach the backend services:
+If you want to test service discovery directly from a pod, use the curl image instead of relying on `curl` inside the service container:
 
 ```bash
-kubectl exec -it $(kubectl get pod -l app=gateway-service -o jsonpath='{.items[0].metadata.name}') -- curl http://user-service:3000/users
-kubectl exec -it $(kubectl get pod -l app=gateway-service -o jsonpath='{.items[0].metadata.name}') -- curl http://product-service:3001/products
-kubectl exec -it $(kubectl get pod -l app=gateway-service -o jsonpath='{.items[0].metadata.name}') -- curl http://order-service:3002/orders
+kubectl run curl-test --image=curlimages/curl:8.4.0 --rm -i --restart=Never -- /usr/bin/curl http://user-service:3000/users
+kubectl run curl-test --image=curlimages/curl:8.4.0 --rm -i --restart=Never -- /usr/bin/curl http://product-service:3001/products
+kubectl run curl-test --image=curlimages/curl:8.4.0 --rm -i --restart=Never -- /usr/bin/curl http://order-service:3002/orders
 ```
 
+## Optional Ingress Bonus
+
+Enable the Minikube ingress controller:
+
+```bash
+minikube addons enable ingress
+```
+
+Apply the ingress manifest:
+
+```bash
+kubectl apply -f submission/ingress/ingress.yaml
+```
+
+Test the ingress using the host header and Minikube IP:
+
+```bash
+curl -H "Host: microservices.local" http://$(minikube ip)/api/users
+curl -H "Host: microservices.local" http://$(minikube ip)/api/products
+curl -H "Host: microservices.local" http://$(minikube ip)/api/orders
+curl -H "Host: microservices.local" http://$(minikube ip)/
+```
+
+Host-based routing uses the request Host header to select the correct ingress rule. It is suitable when you want domain-based routing across multiple services.
+
+Path-based routing uses the request URL path itself to route traffic. It is suitable when one hostname needs multiple service routes like `/users`, `/products`, and `/orders`.
+
+For path-based ingress, use direct URLs:
+
+```bash
+curl http://$(minikube ip)/users
+curl http://$(minikube ip)/products
+curl http://$(minikube ip)/orders
+curl http://$(minikube ip)/
+```
 ## Troubleshooting
 
 - `ImagePullBackOff`: build images inside Minikube or use `minikube image load`.
